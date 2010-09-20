@@ -38,7 +38,7 @@ class GSwitchTest extends haxe.unit.TestCase {
             //
             3 = 1,
             5 = 2,
-            ~0
+            _ = 0
       );
 
       assertEquals(res, 2);
@@ -53,7 +53,7 @@ class GSwitchTest extends haxe.unit.TestCase {
             EA1 = 1,
             EA4(EA2(2)) = 2,
             EA4(EA5(EB2("apple"))) = 3,
-            ~0
+            _ = 0
       );
 
       assertEquals(res, 3);
@@ -66,7 +66,7 @@ class GSwitchTest extends haxe.unit.TestCase {
             //
             EnumA.EA1 = 1,
             EnumA.EA2(x) = 2,
-            ~0
+            _ = 0
       );
 
       assertEquals(res, 2);
@@ -82,7 +82,7 @@ class GSwitchTest extends haxe.unit.TestCase {
          EnumB.EB1 =    2,
          EnumA.EA2(x) = 3,
          EnumA.EA1 =    4,
-         ~0
+         _ = 0
       );
 
       assertEquals(res, 3);
@@ -96,7 +96,7 @@ class GSwitchTest extends haxe.unit.TestCase {
             EA1 = 1,
             EA4(EA2(2)) = 2,
             EA4(EA5(EB2("apple"))) = 3,
-            ~0
+            _ = 0
       );
 
       assertEquals(res, 0);
@@ -110,7 +110,7 @@ class GSwitchTest extends haxe.unit.TestCase {
                EA1 =
                   return 10,
                EA2(_) = 2,
-               ~0
+               _ = 0
          );
       };
 
@@ -124,7 +124,7 @@ class GSwitchTest extends haxe.unit.TestCase {
             EB2("apple"),
             //
             EB2(!s) = 1,
-            ~0
+            _ = 0
       );
 
       assertEquals(res, 1);
@@ -135,7 +135,7 @@ class GSwitchTest extends haxe.unit.TestCase {
             EA2(5),
             //
             EA3(y) & EA2(y) = 1,
-            ~0
+            _ = 0
       );
 
       assertEquals(res, 1);
@@ -146,7 +146,7 @@ class GSwitchTest extends haxe.unit.TestCase {
             EA2(5),
             //
             EA3(y) & EA2(y) | (y > 5) = 1,
-            ~0
+            _ = 0
       );
 
       assertEquals(res, 0);
@@ -160,7 +160,7 @@ class GSwitchTest extends haxe.unit.TestCase {
             EA3(x) = 1,
             EA6(a, b) | (a > 3 && b > 15.0) = 2,
             EA6(a, b) | (a > 3 && b == 10.0) = 3,
-            ~0
+            _ = 0
       );
 
       assertEquals(res, 3);
@@ -177,9 +177,9 @@ class GSwitchTest extends haxe.unit.TestCase {
                   x,
                   //
                   EA6(!v, b) | (b < 15.0) = 1,
-                  ~0
+                  _ = 0
                ),
-            ~0
+            _ = 0
       );
 
       assertEquals(res, 1);

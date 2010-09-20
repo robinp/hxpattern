@@ -405,7 +405,7 @@ class GSwitch
    }
 
    static var GSWITCH_USAGE = 
-      "GSwitch takes arguments <on>, [<case1_1 [& case1_2 & ...] [ | (<guard expr>)] = <expr> >, ...] ~<default>\n\t(<on> must be the first argument, <default> can be second or last";
+      "GSwitch takes arguments <on>, [<case1_1 [& case1_2 & ...] [ | (<guard expr>)] = <expr> >, ...], _ = <default>\n\t(<on> must be the first argument, _ = <default> can be second or last";
 
    static function arrayFromAndOp(e: Expr, cases: Array<Expr>) {
       return switch (e.expr) {
@@ -428,13 +428,36 @@ class GSwitch
       };
    }
 
+   static function checkAndGetDefault(e: Expr): Null<Expr> {
+      return switch (e.expr) {
+         default: null;
+         case EBinop(op, e1, e2):
+            switch (op) {
+               default: null;
+               case OpAssign:
+                  switch (e1.expr) {
+                     default: null;
+                     case EConst(c):
+                        switch (c) {
+                           default: null;
+                           case CIdent(s):
+                              if (s == "_")
+                                 e2;
+                              else
+                                 null;                              
+                       }
+                 }
+           } 
+      };
+   }
+
    static function extractGSwitchData(e: Array<Expr>): GSwitchData {
       // validate input arguments
 
       if (e.length < 2)
          throw GSWITCH_USAGE;
 
-      // first case can't contain assignment
+      // first parameter (=switch-var) can't contain assignment
       switch (e[0].expr) {
          default: //pass
          case EBinop(op, _, _):
@@ -449,33 +472,21 @@ class GSwitch
       var a_begin = 1;
       var a_end = e.length;
       
-      switch (e[1].expr) {
-         default: //pass
-         case EUnop(op, _, exp):
-            switch (op) {
-               default: //pass
-               case OpNegBits:
-                  def = exp;
-                  a_begin++;
-            }
-      };
+      def = checkAndGetDefault(e[1]);
 
-      if (def == null) {
+      if (def != null) {
+         a_begin++;
+      }
+      else {
          if (e.length <= 2)
             throw GSWITCH_USAGE;
          
-         switch (e[e.length - 1].expr) {
-            default: //pass
-            case EUnop(op, _, exp):
-               switch (op) {
-                  default: //pass
-                  case OpNegBits:
-                     def = exp;
-                     a_end--;
-               }
-         };
+         def = checkAndGetDefault(e[e.length - 1]);
 
-         if (def == null) 
+         if (def != null) {
+            a_end--;
+         }
+         else
             throw GSWITCH_USAGE;
       }
 
