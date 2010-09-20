@@ -1,0 +1,16 @@
+2010-09-20  Robin Palotai  <palotai.robin ... gmail.com>
+
+   * organized user API into Hxpat.hx
+
+   * Hxpat.gswitch does not take a 'switch' structure as input, but separate parameters
+
+   * case values are separated with '&'
+
+   * guard is separated with '|' (and should be paranthesised)
+
+   * case expression is separated with '=', and should be put in a block for multiple instructions
+
+   * moved unit test to 'test' directory
+
+   * works with haxe r3398 (from svn)
+
