@@ -1,5 +1,10 @@
 2010-09-20  Robin Palotai  <palotai.robin ... gmail.com>
 
+   * modified default case syntax to _ = <default>
+
+
+2010-09-20  Robin Palotai  <palotai.robin ... gmail.com>
+
    * organized user API into Hxpat.hx
 
    * Hxpat.gswitch does not take a 'switch' structure as input, but separate parameters
