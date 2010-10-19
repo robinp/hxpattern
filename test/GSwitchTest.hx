@@ -26,6 +26,43 @@ class GSwitchTest extends haxe.unit.TestCase {
       super();
    }
 
+   public function testHaxeSwitch1() {
+      var e: Dynamic = EA1;
+      var res = switch (e) {
+         case EB1: 1;
+         default: 0;
+      };
+
+      // fails, Haxe issue #222
+      assertEquals(res, 0);
+   }
+
+   /*
+   public function testHaxeSwitch2() {
+      // doesn't compile, Haxe issue #224
+
+      var e = EA1;
+      var res = switch (e) {
+         case EnumA.EA1: 1;
+         case EnumA.EA2(x): 2;
+         default: 0;
+      };
+
+      assertEquals(res, 1);
+   }
+   */
+
+   public function testHaxeSwitch3() {
+      var e = null;
+      var res = switch (e) {
+         case EA1: 1;
+         default: 0;
+      };
+
+      // fails, Haxe issue (not submitted yet)
+      assertEquals(res, 0);
+   }
+
    public function testNoMultiEval() {
       var i = 0;
       var f = function () { 
@@ -59,7 +96,9 @@ class GSwitchTest extends haxe.unit.TestCase {
       assertEquals(res, 3);
    }
 
+   /*
    public function testFullEnumName() {
+      // doesn't compile, haxe issue#224
       var on = EA2(5);
       var res = Hxpat.gswitch(
             on,
@@ -71,6 +110,39 @@ class GSwitchTest extends haxe.unit.TestCase {
 
       assertEquals(res, 2);
    }
+   */
+
+   public function testMixedExprType() {
+      var on = 5;
+      var x = 10;
+      Hxpat.gswitch(
+            on,
+            //
+            5 = {
+               x = Std.random(5);
+               // error, this is needed for the code to even compile
+               null; 
+            },
+            7 = {
+               new List().add(3);
+            },
+            _ = throw "x"
+      );
+      assertEquals(x != 10, true);
+   }
+
+   public function testNullSwitch() {
+      var on = null;
+      var res = Hxpat.gswitch(
+         on,
+         //
+         5 = 1,
+         EA1 = 2,
+         _ = 0
+      );
+
+      assertEquals(res, 0);
+   }
 
    public function testDynamic() {
       var on : Dynamic = EA2(5);
@@ -78,15 +150,32 @@ class GSwitchTest extends haxe.unit.TestCase {
       var res = Hxpat.gswitch(
          on,
          //
-         EnumB.EB2(s) = 1,
-         EnumB.EB1 =    2,
-         EnumA.EA2(x) = 3,
-         EnumA.EA1 =    4,
+         EB2(s) = 1,
+         EB1 =    2,
+         EA2(x) & EA3(x) = 3,
+         EA1 =    4,
+         _ = 0
+      );
+
+      assertEquals(res, 3);
+   } 
+ 
+   public function testDynamicShortName() {
+      var on : Dynamic = EA2(5);
+
+      var res = Hxpat.gswitch(
+         on,
+         //
+         EB2(s) = 1,
+         EB1 =    2,
+         EA2(x) = 3,
+         EA1 =    4,
          _ = 0
       );
 
       assertEquals(res, 3);
    }
+
 
    public function testDefault() { 
       var on = EA2(7);
