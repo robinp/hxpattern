@@ -1,3 +1,9 @@
+2010-10-18  Robin Palotai  <palotai.robin ... gmail.com>
+
+   * added type-checking to enum switching (should be rewritten once haxe.macro.Context API is ready)
+
+   * the full enum name format is not rewritten to the short from now on. Should work once haxe issue #224 is fixed
+
 2010-09-20  Robin Palotai  <palotai.robin ... gmail.com>
 
    * modified default case syntax to _ = <default>
