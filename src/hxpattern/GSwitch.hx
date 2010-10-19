@@ -54,7 +54,15 @@ class GSwitch
          mkStaticField(cls, field),
          args
       ));
+   } 
+ 
+   public static function mkTrace(w: Expr) {
+      return mk(ECall(
+         mk(EConst(CIdent("trace"))),
+         [ w ]
+      ));
    }
+	
 	
    // ----- GSwitch specific expression manipulation -----
 
@@ -93,42 +101,64 @@ class GSwitch
       return varidx;
    }
 
-   static function rewriteTypeAndGetName(
-            t: Expr, 
-            field: String, 
-            args: Null<Array<Expr>>,
-            arr: Array<Expr>, 
-            i: Int) 
+   static function getCtorName(t: Expr): Null<String>
    { 
-      // capture enums in the format EnumName.EN1(...)
-      // for the purpose of runtime type checking
-      //
-      // once haxe.macro gets type query
-      // support API, this could be more elegant
-
       return switch (t.expr) {
-         default: throw "unxpected: " + t;
-
-         case EType(_, _):
-            throw "please import the package containing the enum for GSwitch";
+         default:
+            null;
 
          case EConst(c):
             switch (c) {
-               default: throw "unxpected: " + t;
-               case CType(s):
-                  arr[i] = if (args == null) {
-                     mkCType(field);
-                  }
-                  else {
-                     mk(ECall(
-                        mkCType(field),
-                        args ));
-                  };
+               default:
+                  null;
 
-                  // retval
-                  s;
+               case CType(s):
+                  s;                             
             }
+
+         case EType(t, f):
+            f;
       };
+   }
+
+   static function mkOr(exprs: Array<Expr>, i = 0): Expr {
+      return if (i == exprs.length - 1) {
+         exprs[i];
+      }
+      else {
+         mk(EBinop(
+            OpBoolOr,
+            exprs[i],
+            mkOr(exprs, i+1)
+         ));
+      };
+   }
+
+   static function mkCtorCondition(on: Expr, ctors: Array<String>): Expr { 
+
+      var vars = mk(EVars([{
+         name: "__ector",
+         type: null,
+         expr: mkStaticCall("Type", "enumConstructor", [on])
+      }]));
+
+      var cond = Lambda.array(Lambda.map(
+         ctors, function (s) {
+            return mk(EBinop(
+               OpEq,
+               // this is a not-too-safe type check, name collisions could occur
+               // but until better enum type check API is not available this is
+               // all we have
+               mkIdent("__ector"),
+               mk(EConst(CString(s)))
+            ));
+         }));
+
+      return mk(EBlock([
+         vars,
+         mkOr(cond)
+      ]));
+
    }
 
    static function caseExpand(?top = true, elist: List<GuardConstExpr>, varidx: Int, guard: Expr, block: Expr): Expr {
@@ -154,7 +184,8 @@ class GSwitch
       else {
          var h = elist.pop();
 
-         var case_types: Null<String> = null;
+         // array holding the enum ctors for checking with Std.is
+         var case_types = [];
 
          var case_val_expr = {
                
@@ -162,33 +193,21 @@ class GSwitch
 
                // check for transforming constructors with enum types 
 
-               var update_check_case_types = function(s: String) {
-                  if (case_types == null) {
-                     case_types = s;
-                  }
-                  else if (case_types != s) {
-                     throw "All case-values in a multi-case should have same EnumType";
-                  }
+               var update_check_case_types = function(s: Null<String>) {
+                  if (s != null)
+                     case_types.push(s);
                };
 
                for (i in 0...case_len) {
+                  // Now just write the CTor name and hope for no collision.
+                  // Later when issue#224 is fixed can be more sophisticated
                   switch (h.econst[i].expr) {
-                     default: //pass
-
-                     case EType(t, f):
-
-                        update_check_case_types(
-                              rewriteTypeAndGetName(t, f, null, h.econst, i) );
+                     default:
+                        update_check_case_types(getCtorName(h.econst[i]));
 
                      case ECall(called, args):
-                        switch (called.expr) {
-                           default: //pass
-                           case EType(t, f):
+                        update_check_case_types(getCtorName(called));
                               
-                              update_check_case_types(
-                                    rewriteTypeAndGetName(t, f, args, h.econst, i) );
-                              
-                        } // switch (called)
                   } // switch (h.econst[i].expr)
                } // for (i)
 
@@ -306,27 +325,44 @@ class GSwitch
 
 
          // retval
-         if (case_types == null) {
-            mkInnerSwitch(h.gvar, val_expr_arr);
+         if (case_types.length == 0) {
+            // not enum matching
+            mkInnerSwitch(
+               h.gvar,
+               val_expr_arr
+            );
          }
          else {
             // wrap into type-check and cast
             mk(EIf(
                // condition
-               mkStaticCall("Std", "is", [h.gvar, mkCType(case_types)]),
+               mk(EBinop(
+                  OpBoolAnd,
+                  // Haxe issue#??, enum switch throws error instead of non-match
+                  mk(EUnop(
+                     OpNot, false,
+                     mk(EBinop(
+                        OpEq,
+                        h.gvar,
+                        mkIdent("null")
+                     ))
+                  )),                  
+
+                  // type-check enum
+                  mkCtorCondition(h.gvar, case_types)
+               )),
                // if-branch
                mk(EBlock([
+                  // cast to stop type-propagation from inside to outside
+                  // would be better to cast to the actual type, but we 
+                  // can't query the enum type from just enum ctor with the
+                  // current API
                   mk(EVars([{
                      name: "__g_cast", 
                      type: null,
                      expr: mk(ECast(
                         h.gvar,
-                        TPath({
-                           pack: [],
-                           name: case_types,
-                           params: [],
-                           sub: null
-                        })
+                        null
                      ))
                   }])),
                   // value of block
@@ -339,7 +375,6 @@ class GSwitch
                mkGFail() 
             ));
          }
-
 
       }
    }
