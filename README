@@ -1,0 +1,116 @@
+= Ingredients =
+
+ * GSwitch macro: 
+  * pattern-matching on enums
+  * guard expressions for filtering cases
+
+
+= Examples =
+
+Note: New syntax was introduced, the examples are rewritten to reflect it.
+
+== Teaser ==
+
+Now *instead of* writing this:
+{{{
+return switch (e) {
+   default: throw "error";
+   case E1(f, x):
+      switch (f) {
+         default: throw "error";
+         case F1:
+            if (x < 5) x;
+            else throw "error";
+      }
+};
+}}} 
+
+You can write this:
+{{{
+return Hxpat.gswitch( e,
+   E1(F1, x) | (x < 5) = x;
+   _ = throw "error";
+);
+}}}
+
+== Pattern-matching on enums ==
+
+You can nest enums and constants as deep as you would like (or until the macro processor runs out of stack space while recursing ;). The first matching case is executed, others are left intact. However now a `default` case is mandatory, since it is possible that none of the cases match. 
+
+The default case is denoted by `_ = <default expression>`. The default case can either be the second or the last argument, however last position is advised to avoid confusion from the matching order. The first argument passed to `gswitch` is always the switch-variable.
+
+{{{
+enum EnumA {
+   EA1;
+   EA2(x: Int);
+   EA3(x: Int);
+   EA4(a: EnumA);
+   EA5(b: EnumB);
+   EA6(x: Int, f: Float);
+}
+
+enum EnumB {
+   EB1;
+   EB2(s: String);
+}
+
+var on = EA4(EA5(EB2("apple")));
+var res = Hxpat.gswitch( on,
+      EA1 = 1,
+      EA4(EA2(2)) = 2,
+      EA4(EA5(EB2("apple"))) = 3,
+      _ = 0
+);
+
+assertEquals(res, 3);
+}}}
+
+== Pattern-matching on variable ==
+
+By prefixing an argument name in a matched enum constructor with `!`, you tell that you want that argument to pattern-match to the already existing variable with that name, instead of capturing the argument value under a new variable with that name. 
+
+*Note*: Such matching is only possible on non-enum variables.
+
+{{{
+var s = "apple";
+
+var res = Hxpat.gswitch( EB2("apple"),
+      EB2(!s) = 1,
+      _ = 0
+);
+
+assertEquals(res, 1);
+}}}
+
+== Guarded cases ==
+
+You can fit a case expression with a guard, which is a simple expression evaluating to true if the case should be accepted, and false otherwise. The guard expression is appended after the case variable, delimmited by a binary-or (`|`) operator (and wrapped in paranthesis if required). 
+
+*Warning*: It is highly advised that the guard expression does not modify any state, or you will lose your sanity on the long term debugging. The easiest way to achieve this is to use simple expressions only and not calling custom functions (maybe some const functions from the standard library are ok to call). Currently the macro doesn't enforce such constraint, but in the future it might.
+
+{{{
+var res = Hxpat.gswitch( EA6(5, 10.0),
+      EA3(x) = 1,
+      EA6(a, b) | (a > 3 && b > 15.0) = 2,
+      EA6(a, b) | (a > 3 && b == 10.0) = 3,
+      _ = 0;
+});
+
+assertEquals(res, 3);
+}}}
+
+== Matching different enums on dynamic ==
+
+If you don't know the type of the enum beforehand, you can switch on dynamic, and even mix multiple enum types. However, in this case you must (and be sure to, since this is not checked yet) prefix the enum constructor with `TheEnumType.` so that runtime type checking can be performed.
+
+{{{
+var on: Dynamic = EA2(5);
+
+var res = Hxpat.gswitch( on,
+      EnumB.EB2(_) = 1,
+      EnumA.EA2(5) = 2,
+      _ = 0
+);
+}}}
+
+For more use-case examples, please see the unit tests.
