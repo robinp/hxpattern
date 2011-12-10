@@ -5,6 +5,8 @@ package hxpattern;
 import haxe.macro.Expr;
 import haxe.macro.Context;
 
+import Hxpat;
+
 typedef GuardConstExpr = {
    gvar: Null<Expr>,
    econst: Array<Expr>
@@ -111,7 +113,28 @@ class GSwitch
             switch (c) {
                default:
                   null;
-
+				case CIdent(s):
+					null;
+/*					var typ = haxe.macro.Context.typeof(t);
+					var en = switch(typ) {
+						case TFun(_,ret):
+							switch(ret) {
+								case TEnum(en,_):
+									en;
+								default: null;
+							}
+						case TEnum(en,_):
+							en;
+						default:null;
+					}
+					if(en!=null) {
+						//check it is not a constructor of the enum type.
+						var ctor = en.get().constructs.get(s);
+						if(ctor!=null && ctor.name==s)
+							 s;
+						else null;
+					}else null;
+*/
                case CType(s):
                   s;                             
             }
@@ -219,17 +242,46 @@ class GSwitch
                      h.econst;
 
                   case ECall(called, args):
-                     switch (called.expr) {
+
+					var enumctor = false;
+					switch(called.expr) {
+						default:
+						case EConst(c):
+							switch(c) {
+								default:
+								case CType(_): enumctor = true;
+								case CIdent(s):
+									//determine if 's' corresponds to an enum constructor in this horrible way.
+									var typ = haxe.macro.Context.typeof(called);
+									var en = switch(typ) {
+										case TFun(_,ret):
+											switch(ret) {
+												case TEnum(en,_): en;
+												default: null;
+											}
+										case TEnum(en,_): en;
+										default: null;
+									}
+									if(en!=null) {
+										//check 's' is actually the constructor, and that 'called' is not just a function call to something returning the enum value
+										var ctor = en.get().constructs.get(s);
+										if(ctor!=null && ctor.name==s) enumctor = true;
+									}
+							}
+					}
+
+					if(!enumctor) h.econst;
+					else {
+/*                     switch (called.expr) {
                         default:
                            h.econst; // possibly method call via EField ?
-
 
                         case EConst(c):
                            switch (c) {
                               default: 
                                  h.econst; // funcall
                               case CType(enum_type):
-
+*/
                                  // enum
                                  
                                  // extract non-vars (
@@ -306,12 +358,13 @@ class GSwitch
                                  // ret val
                                  res;
 
-                           } // switch (c)
+  /*                         } // switch (c)
 
                         // case EConst(c)
 
                      } // switch (called.expr)
-
+*/
+					}
                   // case ECall(called, args)
                
                } // switch (h.econst[0].expr)
