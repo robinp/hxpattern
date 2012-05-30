@@ -111,7 +111,8 @@ class GSwitch
             switch (c) {
                default:
                   null;
-
+				case CIdent(s):
+					null;
                case CType(s):
                   s;                             
             }
@@ -219,99 +220,113 @@ class GSwitch
                      h.econst;
 
                   case ECall(called, args):
-                     switch (called.expr) {
-                        default:
-                           h.econst; // possibly method call via EField ?
 
+					var enumctor = false;
+					switch(called.expr) {
+						default:
+						case EConst(c):
+							switch(c) {
+								default:
+								case CType(_): enumctor = true;
+								case CIdent(s):
+									//determine if 's' corresponds to an enum constructor in this horrible way.
+									var typ = haxe.macro.Context.typeof(called);
+									var en = switch(typ) {
+										case TFun(_,ret):
+											switch(ret) {
+												case TEnum(en,_): en;
+												default: null;
+											}
+										case TEnum(en,_): en;
+										default: null;
+									}
+									if(en!=null) {
+										//check 's' is actually the constructor, and that 'called' is not just a function call to something returning the enum value
+										var ctor = en.get().constructs.get(s);
+										if(ctor!=null && ctor.name==s) enumctor = true;
+									}
+							}
+					}
 
-                        case EConst(c):
-                           switch (c) {
-                              default: 
-                                 h.econst; // funcall
-                              case CType(enum_type):
+					if(!enumctor) h.econst;
+					else {
+						 // enum
+						 
+						 // extract non-vars (
+						 //    - e.EConst(anything except CIdent)
+						 //    - e.ECall  (enum or funcall)
+						 //    - e.EUnop(OpNot(), false, e.EConst(CIdent(x))), which is !x
+						 //      marking that x is not to be bound but to be matched on as
+						 //      an existing var 
+						 // from the enum arguments and replace with generated
+						 // variables (while also recording the variables
+						 // and the corresponding expressions)
+						 
+						 var new_args = []; // will contain the existing or generated variables
 
-                                 // enum
-                                 
-                                 // extract non-vars (
-                                 //    - e.EConst(anything except CIdent)
-                                 //    - e.ECall  (enum or funcall)
-                                 //    - e.EUnop(OpNot(), false, e.EConst(CIdent(x))), which is !x
-                                 //      marking that x is not to be bound but to be matched on as
-                                 //      an existing var 
-                                 // from the enum arguments and replace with generated
-                                 // variables (while also recording the variables
-                                 // and the corresponding expressions)
-                                 
-                                 var new_args = []; // will contain the existing or generated variables
+						 for (arg_expr in args) {
 
-                                 for (arg_expr in args) {
+							// proof-check multi-case: only identifiers allowed
+							//
+							// we only check the first case-val, others will be dealt with
+							// by Haxe after the macro substitution
+							if (case_len > 1) switch (arg_expr.expr) {
+							   default: throw "multi-val case: only identifiers allowed";
+							   case EConst(c):
+								  switch (c) {
+									 default: throw "multi-val case: only identifiers allowed";
+									 case CIdent(_): // pass, ok
+								  }
+							}
 
-                                    // proof-check multi-case: only identifiers allowed
-                                    //
-                                    // we only check the first case-val, others will be dealt with
-                                    // by Haxe after the macro substitution
-                                    if (case_len > 1) switch (arg_expr.expr) {
-                                       default: throw "multi-val case: only identifiers allowed";
-                                       case EConst(c):
-                                          switch (c) {
-                                             default: throw "multi-val case: only identifiers allowed";
-                                             case CIdent(_): // pass, ok
-                                          }
-                                    }
+							// transform args
+							switch (arg_expr.expr) {
+							   case EConst(c):
+								  switch (c) {
+									 case CIdent(_):
+										// don't transform
+										new_args.push(arg_expr);
 
-                                    // transform args
-                                    switch (arg_expr.expr) {
-                                       case EConst(c):
-                                          switch (c) {
-                                             case CIdent(_):
-                                                // don't transform
-                                                new_args.push(arg_expr);
+									 default:
+										varidx = mkGuardVar(varidx, arg_expr, elist, new_args);
 
-                                             default:
-                                                varidx = mkGuardVar(varidx, arg_expr, elist, new_args);
+								  } // switch (c)
 
-                                          } // switch (c)
+							   case ECall(_, _):
+								  varidx = mkGuardVar(varidx, arg_expr, elist, new_args);
 
-                                       case ECall(_, _):
-                                          varidx = mkGuardVar(varidx, arg_expr, elist, new_args);
+							   case EUnop(op, _, e):
+								  switch (op) {
+									 case OpNot:
+										varidx = mkGuardVar(varidx, e, elist, new_args);
+									 
+									 default:
+										throw ("Only ! operator supported in enum-match: " +arg_expr);
 
-                                       case EUnop(op, _, e):
-                                          switch (op) {
-                                             case OpNot:
-                                                varidx = mkGuardVar(varidx, e, elist, new_args);
-                                             
-                                             default:
-                                                throw ("Only ! operator supported in enum-match: " +arg_expr);
+								  } // switch (op)
 
-                                          } // switch (op)
+							   default:
+								  throw ("Not supported expr in enum arg-match: " + arg_expr);
+							} // switch (arg_expr.expr)
+						 } // for (arg_expr in args)
 
-                                       default:
-                                          throw ("Not supported expr in enum arg-match: " + arg_expr);
-                                    } // switch (arg_expr.expr)
-                                 } // for (arg_expr in args)
+						 var res = [ 
+							mk(ECall(
+							   called, 
+							   new_args
+							)) 
+						 ];
 
-                                 var res = [ 
-                                    mk(ECall(
-                                       called, 
-                                       new_args
-                                    )) 
-                                 ];
+						 if (case_len > 1) {
+							for (i in 1...case_len) {
+							   res.push(h.econst[i]);
+							}
+						 }
 
-                                 if (case_len > 1) {
-                                    for (i in 1...case_len) {
-                                       res.push(h.econst[i]);
-                                    }
-                                 }
+						 // ret val
+						 res;
 
-                                 // ret val
-                                 res;
-
-                           } // switch (c)
-
-                        // case EConst(c)
-
-                     } // switch (called.expr)
-
+					}
                   // case ECall(called, args)
                
                } // switch (h.econst[0].expr)
